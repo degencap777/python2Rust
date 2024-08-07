@@ -1,0 +1,19 @@
+[package]
+name = "py2rs"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "py2rs"
+path = "src/text_chunker.rs"
+
+[[bin]]
+name = "text_chunker"          # This is the name for the binary
+path = "src/text_chunker.rs"   # This specifies that this file is a binary target
+
+[dependencies]
+pyo3 = { version = "0.22.2", features = ["extension-module"] }
+image = "0.25.2"
+unidecode = "0.3.0"
+chrono = "0.4"
+regex = "1"
