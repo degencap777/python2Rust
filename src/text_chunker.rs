@@ -3,9 +3,9 @@ use std::path::Path;
 extern crate unidecode;
 use unidecode::unidecode;
 use std::fmt;
-use chrono::{DateTime, Utc}; // Importing DateTime and Utc from chrono
+use chrono::{DateTime, Utc};
 use image::{DynamicImage, GenericImageView};
-use std::collections::HashMap; // Required for HashMap
+use std::collections::HashMap; 
 use regex::Regex;
 
 pub struct Defaults;
@@ -144,7 +144,6 @@ impl Data {
            DataValue::JsonDict(_) => DataType::JsonDict,
            DataValue::Pdf(_) => DataType::Pdf,
            &DataValue::Char(_) => todo!(),
-           // Add additional types if needed
        }
    }
 }
@@ -191,7 +190,6 @@ impl DataValue {
            DataValue::Text(s) => s.is_empty(),
            DataValue::MultiselectAnswers(vec) => vec.is_empty(),
            DataValue::JsonArray(vec) => vec.is_empty(),
-           // Add more cases for other variants as needed
            _ => false, // Assume other types are not "empty"
        }
    }
@@ -469,7 +467,4 @@ fn main() {
    for bundle in chunks {
       println!("{:?}", bundle); // Using Debug format to print the output
   }
-   //  for chunk in chunks.iter().take(3) {
-   //      println!("{:?}", chunk);
-   //  }
 }
