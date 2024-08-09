@@ -374,29 +374,29 @@ pub fn create_nonoverlapping_chunks(text: &str, chunk_length_characters: usize) 
 }
 
 pub fn split_lines(text: &str) -> Vec<&str> {
-    text.split('\n') // Splitting by newline
+    text.split("\n") // Splitting by newline
         .flat_map(|line| line.split('\r')) // Additionally split by carriage return
         .collect() // Collecting into a Vec
 }
 
 pub fn fix_line_breaks(text: &str) -> String {
     // Split the text into lines, join them back with \n, and remove \r
-    let text = split_lines(text).join("\n");
+    // let text = split_lines(text).join("\n");
     text.replace('\r', "")
 }
 
-fn fix_apostrophes(text: &str) -> String {
+pub fn fix_apostrophes(text: &str) -> String {
     // Use `unidecode` to normalize the text
     let text = unidecode(text);
-    text.replace("\u{2019}", "'") // Replace the Unicode right single quotation mark with a regular apostrophe
+    text.replace("\\u2019", "'") // Replace the Unicode right single quotation mark with a regular apostrophe
 }
 
-fn normalize_special_characters(text: &str) -> String {
+pub fn normalize_special_characters(text: &str) -> String {
     if text.is_empty() {
         return text.to_string();
     }
-    let fixed_text = fix_line_breaks(text); 
-    fix_apostrophes(&fixed_text) 
+    let second_text = fix_line_breaks(text); 
+    fix_apostrophes(&second_text) 
 }
 
 pub fn read_text_file(path_to_text_file: &str, normalize_special_characters_flag: bool) -> std::io::Result<String> {

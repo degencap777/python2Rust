@@ -269,7 +269,7 @@ def create_nonoverlapping_chunks(text: str, chunk_length_characters: int = Defau
     print(f'Created {len(chunks)} nonoverlapping chunks from {len(text)} characters, longest chunk={max_chunk}', trace)
     return chunks
 
-def _merge_chunks(self, chunks: list[str], start_index: int, num_chunks: int) -> str:
+def _merge_chunks(chunks: list[str], start_index: int, num_chunks: int) -> str:
     group = []
     for i in range(num_chunks):
         if start_index + i < len(chunks):

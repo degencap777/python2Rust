@@ -1,1 +1,3 @@
-A text chunker breaks large bodies of text into smaller. that are manageable pieces.
+First \u2019line\u2019.
+Second \u2019line\u2019.
+Third \u2019line\u2019.
