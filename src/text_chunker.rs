@@ -373,10 +373,15 @@ pub fn create_nonoverlapping_chunks(text: &str, chunk_length_characters: usize) 
     chunks
 }
 
+pub fn split_lines(text: &str) -> Vec<&str> {
+    text.split('\n') // Splitting by newline
+        .flat_map(|line| line.split('\r')) // Additionally split by carriage return
+        .collect() // Collecting into a Vec
+}
 
-fn fix_line_breaks(text: &str) -> String {
+pub fn fix_line_breaks(text: &str) -> String {
     // Split the text into lines, join them back with \n, and remove \r
-    let text = text.lines().collect::<Vec<&str>>().join("\n");
+    let text = split_lines(text).join("\n");
     text.replace('\r', "")
 }
 
