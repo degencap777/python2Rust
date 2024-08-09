@@ -8,23 +8,25 @@ use std::collections::HashMap;
 use std::fmt;
 use unidecode::unidecode;
 
+/// A struct containing default values for various parameters used throughout the application.
 pub struct Defaults;
 
+// Constants in `Defaults` struct provide configuration settings for various functionalities.
 impl Defaults {
     pub const TEMPERATURE: f32 = 0.0;
-    pub const TEMPERATURE_GEMINI: f32 = 0.36; // Bayesian optimization for GeminiPro
+    pub const TEMPERATURE_GEMINI: f32 = 0.36; 
     pub const TOP_K: usize = 40;
     pub const TOP_P: f32 = 0.97;
     pub const TOP_P_GEMINI: f32 = 1.0;
-    pub const TOP_P_OPENAI: Option<f32> = None; // Recommended to use either temperature or top_p
-    pub const MAX_OUTPUT_TOKENS: usize = 2048; // tokens
+    pub const TOP_P_OPENAI: Option<f32> = None; 
+    pub const MAX_OUTPUT_TOKENS: usize = 2048; 
     pub const MAX_OUTPUT_TOKENS_GEMINI15: usize = 8192;
     pub const MAX_OUTPUT_TOKENS_ANTHROPIC: usize = 4096;
     pub const MAX_OUTPUT_TOKENS_LLAMA_70B: usize = 2048;
-    pub const CHUNK_SIZE: usize = 1000; // characters
-    pub const CHUNK_OVERLAP: usize = 0; // characters
-    pub const CHUNKER_MAX_SENTENCE: usize = 1000; // characters
-    pub const FILE_ENCODING: &'static str = "utf-8"; // used to be 'ISO-8859-1'
+    pub const CHUNK_SIZE: usize = 1000; 
+    pub const CHUNK_OVERLAP: usize = 0; 
+    pub const CHUNKER_MAX_SENTENCE: usize = 1000; 
+    pub const FILE_ENCODING: &'static str = "utf-8"; 
     pub const GCP_LOCATION: &'static str = "us-central1";
     pub const SPANNER_INSTANCE: &'static str = "proton";
     pub const SPANNER_TIMEOUT: u64 = 300; // seconds
@@ -46,16 +48,16 @@ impl Defaults {
     pub const MISTRAL_MODEL: &'static str = "Mistral-7B-IT-01";
     pub const GEMMA_MODEL: &'static str = "gemma-7b-it";
     pub const MAX_INFERENCE_THREADS: usize = 20;
-    pub const INFERENCE_THREAD_TIMEOUT_SECONDS: u64 = 60 * 4; // Larger timeout for thread pool
+    pub const INFERENCE_THREAD_TIMEOUT_SECONDS: u64 = 60 * 4; 
     pub const INFERENCE_THREAD_MAX_TIMEOUT_RETRIES: usize = 3;
     pub const NOT_FOUND_TAG: &'static str = "NOT_FOUND";
-    pub const SECTION_NOT_FOUND_TAG: &'static str = "NO_SECTION"; // Used in QuestionSet
-    pub const VS_LOCATION: &'static str = "global"; // vertex search
+    pub const SECTION_NOT_FOUND_TAG: &'static str = "NO_SECTION"; 
+    pub const VS_LOCATION: &'static str = "global"; 
     pub const VS_DEFAULT_CONFIG: &'static str = "default_config";
-    pub const VS_MAX_RESULTS: usize = 10; // maximum = 100
-    pub const VS_NUM_SUMMARY_SOURCES: usize = 5; // maximum = 5
-    pub const VS_NUM_EXTRACTIVE_ANSWERS: usize = 1; // per document, maximum = 5
-    pub const VS_NUM_EXTRACTIVE_SEGMENTS: usize = 5; // per document, maximum = 10
+    pub const VS_MAX_RESULTS: usize = 10; 
+    pub const VS_NUM_SUMMARY_SOURCES: usize = 5; 
+    pub const VS_NUM_EXTRACTIVE_ANSWERS: usize = 1; 
+    pub const VS_NUM_EXTRACTIVE_SEGMENTS: usize = 5; 
     pub const WORKER_DEFAULT_NAMESPACE: &'static str = "DEFAULT";
     pub const WORKER_MAX_TASK_RETRIES: usize = 3;
     pub const WORKER_POLLING_INTERVAL_SECONDS: f64 = 1.0;
@@ -64,6 +66,7 @@ impl Defaults {
     pub const SHORTDOC_CHUNK_SIZE: usize = 3000;
 }
 
+/// Represents the type of data source (e.g., Document, Image, Directory).
 #[derive(Debug, Clone)]
 pub enum DataSourceType {
     Document = 1,
@@ -71,6 +74,7 @@ pub enum DataSourceType {
     Directory = 3,
 }
 
+/// Represents a data source with its type, name, location, and version.
 #[derive(Debug, Clone)]
 pub struct DataSource {
     pub source_type: DataSourceType,
@@ -79,18 +83,19 @@ pub struct DataSource {
     pub version: String,
 }
 
-// Implementing Default trait to provide default values
 impl Default for DataSource {
+    // Default implementation for DataSource struct
     fn default() -> Self {
         Self {
             source_type: DataSourceType::Document,
-            name: String::new(), // Correct way to initialize an empty String
+            name: String::new(), 
             location: String::new(),
             version: String::new(),
         }
     }
 }
 
+/// Represents different types of data (e.g., Text, Int, Float).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DataType {
     Undefined = 1, // Triggers automatic type detection
@@ -109,6 +114,7 @@ pub enum DataType {
     DateTime = 14,
 }
 
+/// Represents a piece of data with its value, ID, and type.
 #[derive(Debug)]
 pub struct Data {
     value: DataValue,
@@ -117,6 +123,7 @@ pub struct Data {
 }
 
 impl Data {
+    /// Creates a new `Data` instance with a given value, type, and ID.
     pub fn new(value: DataValue, data_type: DataType, id: &str) -> Self {
         let mut data_type = data_type;
 
@@ -131,6 +138,7 @@ impl Data {
         }
     }
 
+    /// Detects the data type of a given `DataValue`.
     pub fn detect_data_type(value: &DataValue) -> DataType {
         match value {
             DataValue::Bool(_) => DataType::Bool,
@@ -149,6 +157,7 @@ impl Data {
 }
 
 impl fmt::Display for Data {
+    /// Formats the `Data` instance as a string for display.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.value {
             DataValue::Image(img) => {
@@ -173,6 +182,7 @@ impl fmt::Display for Data {
     }
 }
 
+/// Represents the various possible values for `Data`.
 #[derive(Debug)]
 pub enum DataValue {
     Text(String),
@@ -185,27 +195,29 @@ pub enum DataValue {
     MultiselectAnswers(Vec<String>),
     JsonArray(Vec<String>),
     JsonDict(HashMap<String, String>),
-    Pdf(Vec<u8>), // Or whatever structure you're using for PDF
+    Pdf(Vec<u8>),
 }
 
 impl DataValue {
-    // Implementing the is_empty() method
+    /// Checks if the `DataValue` is empty.
     pub fn is_empty(&self) -> bool {
         match self {
             DataValue::Text(s) => s.is_empty(),
             DataValue::MultiselectAnswers(vec) => vec.is_empty(),
             DataValue::JsonArray(vec) => vec.is_empty(),
-            _ => false, // Assume other types are not "empty"
+            _ => false, 
         }
     }
 }
 
+/// Represents error codes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorCode {
     Undefined = 1,
-    ResponseBlocked = 2, // Model prediction blocked by filters, can retry with a different model
+    ResponseBlocked = 2, 
 }
 
+/// Contains metadata information related to inference.
 #[derive(Debug, Default)]
 pub struct InferenceMetadata {
     num_input_tokens: usize,
@@ -213,7 +225,7 @@ pub struct InferenceMetadata {
 }
 
 impl InferenceMetadata {
-    // Constructor to create a new instance
+    /// Creates a new instance of `InferenceMetadata` with specified input and output token counts.
     pub fn new(num_input_tokens: usize, num_output_tokens: usize) -> Self {
         InferenceMetadata {
             num_input_tokens,
@@ -222,8 +234,8 @@ impl InferenceMetadata {
     }
 }
 
-// Implementing the Display trait to mimic the __repr__ method in Python
 impl fmt::Display for InferenceMetadata {
+    /// Formats `InferenceMetadata` as a string for display.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -233,26 +245,27 @@ impl fmt::Display for InferenceMetadata {
     }
 }
 
+/// Represents a bundle of data items with associated metadata.
 #[derive(Debug)]
 pub struct DataBundle {
-    items: Vec<Data>,                      // An ordered list of items
-    error_code: ErrorCode,                 // Error code with a default
-    inference_metadata: InferenceMetadata, // Metadata about inference
-    data_source: Option<DataSource>,       // Optional metadata about the source of data
+    items: Vec<Data>,                      
+    error_code: ErrorCode,                 
+    inference_metadata: InferenceMetadata, 
+    data_source: Option<DataSource>,      
 }
 
 impl DataBundle {
-    // Constructor to create a new instance of DataBundle
+    /// Creates a new `DataBundle` with specified items, error code, and data source.
     pub fn new(items: Vec<Data>, error_code: ErrorCode, data_source: Option<DataSource>) -> Self {
         DataBundle {
             items,
             error_code,
-            inference_metadata: InferenceMetadata::default(), // Use the default implementation
+            inference_metadata: InferenceMetadata::default(),
             data_source,
         }
     }
 
-    // This method provides a string representation similar to the __repr__ in Python
+    /// Returns a string representation of the `DataBundle`.
     fn repr(&self) -> String {
         if self.is_empty() {
             return "EMPTY".to_string();
@@ -269,47 +282,42 @@ impl DataBundle {
         }
     }
 
-    // Check if the DataBundle is empty
+    /// Checks if the `DataBundle` is empty.
     pub fn is_empty(&self) -> bool {
         if self.items.is_empty() {
             return true;
         }
-        self.items.iter().all(|item| item.value.is_empty()) // Assuming item.value has a method or field called is_empty
+        self.items.iter().all(|item| item.value.is_empty()) 
     }
 }
 
-// Implementing the Display trait for custom string representation
 impl fmt::Display for DataBundle {
+    /// Implements the Display trait for `DataBundle` to format it as a string.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.repr())
     }
 }
 
+/// Splits a text into sentences based on specific punctuation marks.
 pub fn split_into_sentences(text: &str) -> Vec<String> {
-    // Uses regex to split text into sentences while preserving all whitespace and line breaks.
-    // Return an empty vector if the text is empty or blank
     if text.trim().is_empty() {
         return Vec::new();
     }
 
-    // Regex pattern to match sentence boundaries (basic implementation)
     let re: Regex = Regex::new(r"(^|[^a-zA-Z0-9])([.!?]+)(\s+|\n|\r|\r\n|$)").unwrap();
 
     let mut sentences: Vec<String> = Vec::new();
     let mut previous_end: usize = 0;
 
-    // Find matches in the text
     for mat in re.find_iter(text) {
         let start: usize = previous_end;
         let end: usize = mat.end();
         previous_end = end;
 
-        // Get the sentence including the punctuation and any following whitespace
         let sentence = &text[start..end].trim_end();
         sentences.push(sentence.to_string());
     }
 
-    // Handle remaining text after the last match
     if previous_end < text.len() {
         let remaining_sentence = &text[previous_end..].trim_start();
         if !remaining_sentence.is_empty() {
@@ -320,18 +328,19 @@ pub fn split_into_sentences(text: &str) -> Vec<String> {
     sentences
 }
 
+/// Merges chunks of text into a single string based on starting index and number of chunks.
 pub fn _merge_chunks(chunks: &[String], start_index: usize, num_chunks: usize) -> String {
     let mut group = Vec::new();
 
     for i in 0..num_chunks {
         if start_index + i < chunks.len() {
-            group.push(chunks[start_index + i].clone()); // Clone the String
+            group.push(chunks[start_index + i].clone()); 
         }
     }
-
-    group.join("\n") // Now join can work because group is Vec<String>
+    group.join("\n") 
 }
 
+/// Creates non-overlapping chunks from provided text based on specified chunk size.
 pub fn create_nonoverlapping_chunks(text: &str, chunk_length_characters: usize) -> Vec<String> {
     let sentences = split_into_sentences(text);
     let mut chunks = Vec::new();
@@ -341,13 +350,11 @@ pub fn create_nonoverlapping_chunks(text: &str, chunk_length_characters: usize) 
 
     for sentence in sentences {
         if sentence.len() > Defaults::CHUNKER_MAX_SENTENCE {
-            // Warning if the sentence is longer than the max allowed
             println!("Warning: long sentence ({} chars)", sentence.len());
         }
         chunk.push(sentence.clone());
         chunk_size += sentence.len();
 
-        // Check if we reached or exceeded the chunk size limit
         if chunk_size >= chunk_length_characters {
             let combined = chunk.join("");
             max_chunk = max_chunk.max(combined.len());
@@ -357,9 +364,7 @@ pub fn create_nonoverlapping_chunks(text: &str, chunk_length_characters: usize) 
         }
     }
 
-    // Add any remaining sentences in the last chunk
     if !chunk.is_empty() {
-        // Join remaining sentences with a space and strip leading/trailing whitespace
         let combined = chunk.join(" ").trim().to_string();
         chunks.push(combined);
     }
@@ -373,24 +378,25 @@ pub fn create_nonoverlapping_chunks(text: &str, chunk_length_characters: usize) 
     chunks
 }
 
+/// Splits a given text into lines, accounting for different line break characters.
 pub fn split_lines(text: &str) -> Vec<&str> {
-    text.split("\n") // Splitting by newline
+    text.split("\n") 
         .flat_map(|line| line.split('\r')) // Additionally split by carriage return
-        .collect() // Collecting into a Vec
+        .collect() 
 }
 
+/// Fixes line breaks in a given text by removing carriage returns.
 pub fn fix_line_breaks(text: &str) -> String {
-    // Split the text into lines, join them back with \n, and remove \r
-    // let text = split_lines(text).join("\n");
     text.replace('\r', "")
 }
 
+/// Fixes apostrophes and normalizes characters in the given text.
 pub fn fix_apostrophes(text: &str) -> String {
-    // Use `unidecode` to normalize the text
     let text = unidecode(text);
     text.replace("\\u2019", "'") // Replace the Unicode right single quotation mark with a regular apostrophe
 }
 
+/// Normalizes special characters in the input text by cleaning it.
 pub fn normalize_special_characters(text: &str) -> String {
     if text.is_empty() {
         return text.to_string();
@@ -399,6 +405,7 @@ pub fn normalize_special_characters(text: &str) -> String {
     fix_apostrophes(&second_text) 
 }
 
+/// Reads a text file and optionally normalizes its special characters.
 pub fn read_text_file(path_to_text_file: &str, normalize_special_characters_flag: bool) -> std::io::Result<String> {
     let text = fs::read_to_string(path_to_text_file)?;
     if normalize_special_characters_flag {
@@ -409,6 +416,7 @@ pub fn read_text_file(path_to_text_file: &str, normalize_special_characters_flag
     }
 }
 
+/// Extracts text chunks from the provided document URI and text, based on specified parameters.
 pub fn get_text_chunks(
     document_uri: &str,
     document_text: &str,
@@ -416,33 +424,37 @@ pub fn get_text_chunks(
     overlap_factor: &mut usize,
     normalize_special_characters_flag: bool,
 ) -> Vec<DataBundle> {
+    // Get the file name from the document URI
     let file_name = Path::new(document_uri)
         .file_name()
         .unwrap()
         .to_string_lossy()
         .to_string();
-    // Creating an instance of DataSource
+    // Create a DataSource instance for the document
     let source = DataSource {
         source_type: DataSourceType::Document,
         name: file_name.clone(),
         location: document_uri.to_string(),
-        version: String::from("1.0"), // If required, you can provide a version
+        version: String::from("1.0"), 
     };
 
-    // Print the created DataSource instance
-    // println!("{:?}", source);
+    // Set overlap_factor to 0 if it's less than 2
     if *overlap_factor < 2 {
         *overlap_factor = 0;
     }
+
+    // Normalize document text if the flag is set
     let document_text = if normalize_special_characters_flag {
         normalize_special_characters(document_text)
     } else {
         document_text.to_string()
     };
+
+    // If chunk length is zero or negative, return the entire document as a single chunk
     if chunk_length_characters <= 0 {
         let data_item = Data {
             value: DataValue::Text(document_text),
-            id: "1".to_string(), // Assuming Data has a field `id` of type String
+            id: "1".to_string(), 
             data_type: DataType::Text,
         };
 
@@ -452,6 +464,7 @@ pub fn get_text_chunks(
             Some(source),
         )];
     }
+    // Create chunk strings based on overlap factor
     let mut chunk_strings;
 
     if *overlap_factor == 0 {
@@ -475,6 +488,7 @@ pub fn get_text_chunks(
         );
     }
 
+    // Create DataBundle instances for each chunk and return them in a vector
     let mut chunks = Vec::new();
 
     for (i, chunk_string) in chunk_strings.iter().enumerate() {
