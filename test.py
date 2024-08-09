@@ -334,7 +334,7 @@ if __name__ == '__main__':
     document = 'Santa claus is coming to town. ' * 10
     
     text = read_text_file('books/book1.txt')
-    chunks = get_text_chunks('book1.txt', text, 500)
-    for chunk in chunks[:3]:
+    chunks = get_text_chunks('book1.txt', text, 5)
+    for chunk in chunks:
         print('=' * 100)
         print(chunk)

@@ -5,11 +5,11 @@ edition = "2021"
 
 [lib]
 name = "py2rs"
-path = "src/text_chunker.rs"
+path = "src/lib.rs"
 
 [[bin]]
-name = "text_chunker"          # This is the name for the binary
-path = "src/text_chunker.rs"   # This specifies that this file is a binary target
+name = "text_chunker"  
+path = "src/main.rs"   
 
 [dependencies]
 pyo3 = { version = "0.22.2", features = ["extension-module"] }
