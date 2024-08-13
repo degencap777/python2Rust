@@ -2,10 +2,10 @@ from unidecode import unidecode
 from urllib.parse import urlparse
 from pathlib import Path
 from nltk.tokenize.punkt import PunktSentenceTokenizer
-from utils.data_source import DataSource, DataSourceType
-from utils.data_bundle import DataBundle
-from utils.data import Data
-from utils.defaults import Default
+from python_src.utils.data_source import DataSource, DataSourceType
+from python_src.utils.data_bundle import DataBundle
+from python_src.utils.data import Data
+from python_src.utils.defaults import Default
   
 class TextChunker:
     def __init__(self) -> None:
@@ -117,7 +117,7 @@ class TextChunker:
 if __name__ == '__main__':
     document = 'Santa claus is coming to town. ' * 10
     
-    text = TextChunker().read_text_file('books/book1.txt')
+    text = TextChunker().read_text_file('../../books/book1.txt')
     chunks = TextChunker().get_text_chunks('book1.txt', text, 5)
     for chunk in chunks:
         print('=' * 100)
