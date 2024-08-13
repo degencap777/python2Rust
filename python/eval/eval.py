@@ -1,11 +1,9 @@
 
 from enum import Enum
-
-class SamplingMethod(Enum):
-    NONE = 0
-    RANDOM = 1
-    HEAD = 2
-    TAIL = 3
+from typing import Optional
+from collections.abc import Callable
+from utils.sampling_method import SamplingMethod
+from utils.data_bundle import DataBundle
 
 class Dataset():
     """Represents evaluation datasets structured as list[dict]."""
