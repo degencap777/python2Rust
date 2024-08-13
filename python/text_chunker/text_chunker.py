@@ -1,3 +1,4 @@
+import os
 from unidecode import unidecode
 from urllib.parse import urlparse
 from pathlib import Path
@@ -7,7 +8,12 @@ from typing import Any
 from datetime import datetime
 from PIL import Image as PI
 from nltk.tokenize.punkt import PunktSentenceTokenizer
-import os
+from utils.exceptions import InvalidArgsError
+from utils.error_code import ErrorCode
+from utils.data_source import DataSource, DataSourceType
+from utils.data_bundle import DataBundle
+from utils.data import Data
+from utils.data_type import DataType
 
 class Default:
     TEMPERATURE = 0
@@ -95,138 +101,6 @@ class DataType(Enum):
     def from_string(cls, string: str) -> 'DataType':
         return cls[string]
   
-class Data():
-    """Unit of Input or Output data for multimodal inference."""
-
-    def __init__(self, value: Any, data_type: DataType = DataType.UNDEFINED, id: str = ''):
-        self.value = value
-        self.id = id
-        if data_type == DataType.UNDEFINED:
-            self.data_type = Data.detect_data_type( value )
-        else:
-            self.data_type = data_type
-
-    def __repr__(self):
-        if self.data_type == DataType.IMAGE:
-            width, height = self.value.size
-            return f'{self.data_type.name}: [{width}x{height}]'
-        elif self.data_type == DataType.PDF:
-            return f'PDF: [{len(self.value)}]'
-        elif self.data_type == DataType.TEXT:
-            if not self.value:
-                return f'{self.data_type.name}[0]: None'
-            truncated_to_one_line = truncate(self.value, 100).replace('\n', ' ')
-            return f'{self.data_type.name}[{len(self.value)}]: {truncated_to_one_line}'
-        else:
-            return f'{self.data_type.name}: {self.value}'
-        
-    def detect_data_type(value: Any) -> DataType:
-        if isinstance(value, bool):  # bool is subclass of int so this must come first
-            return DataType.BOOL
-        if isinstance(value, int):
-            return DataType.INT
-        if isinstance(value, str):
-            return DataType.TEXT
-        if isinstance(value, float):
-            return DataType.FLOAT
-        if isinstance(value, datetime):
-            return DataType.DATE
-        if isinstance(value, PI.Image):
-            return DataType.IMAGE
-        if isinstance(value, list):
-            if all([isinstance(item, str) and len(item) == 1 for item in value]):
-                return DataType.MULTISELECT_ANSWERS
-            else:
-                return DataType.JSON_ARRAY
-        if isinstance(value, dict):
-            return DataType.JSON_DICT
-        if isinstance(value, bytes):
-            return DataType.PDF
-        raise InvalidArgsError(f'Unknown data type: {type(value)}.')
-
-class DataSourceType(Enum):
-    DOCUMENT = 1
-    IMAGE = 2
-    DIRECTORY = 3
-
-@dataclass
-class DataSource():
-    """Information about the source of data in Batches and Interactions."""
-    source_type: DataSourceType = DataSourceType.DOCUMENT
-    name: str = ''
-    location: str = ''
-    version: str = ''
-
-    def __repr__(self) -> str:
-        v = self.version or ''
-        return f'{self.name}.{v}'
-
-class ErrorCode(Enum):
-    """Represents errors that Proton can workaround without throwing an exception."""
-
-    UNDEFINED = 1
-    RESPONSE_BLOCKED = 2  # Model prediction blocked by filters, can retry with a different model
-
-@dataclass
-class InferenceMetadata():
-    num_input_tokens: int = 0
-    num_output_tokens: int = 0
-
-    def __repr__(self) -> str:
-        return f'num_input_tokens={self.num_input_tokens}, num_output_tokens={self.num_output_tokens}'
-
-class DataBundle():
-    """Ordered list of texts, images, videos intended for multimodal inference input and output."""
-
-    def __init__(
-        self,
-        items: list[Data],
-        error_code: ErrorCode = ErrorCode.UNDEFINED,
-        data_source: DataSource | None = None
-    ):
-        self.items = items
-        self.error_code = error_code
-        self.inference_metadata: InferenceMetadata
-        self.data_source = data_source         # optional metadata about the source of data for this bundle
-
-    def __repr__(self):
-        if self.is_empty():
-            return 'EMPTY'
-        if len(self.items) == 1:
-            return f'Bundle[{self.items[0]}]'
-        else:
-            return f'Bundle[{len(self.items)} items starting with {self.items[0]}]'
-    
-    def is_empty(self) -> bool:
-        if not self.items:
-            return True
-        for item in self.items:
-            if item.value:
-                return False
-        return True
-  
-class ProtonException(Exception):
-    def __init__(
-        self,
-        message: str | None = None,
-    ):
-        super(ProtonException, self).__init__(message)
-        
-class InvalidArgsError(ProtonException):
-    """A proton method was called with invalid arguments."""
-    
-def truncate(text: str, max_length: int, ellipsis: str = '...', no_linebreaks: bool = False) -> str:
-    """Truncates a string to a given length."""
-    if no_linebreaks:
-        text = remove_line_breaks(text)
-    if len(text) > max_length:
-        return text[:max_length - len(ellipsis)] + ellipsis
-    else:
-        return text
-
-def remove_line_breaks(text: str) -> str:
-    return ' '.join(text.splitlines())
-
 def split_into_sentences(text: str) -> list[str]:
     '''Uses NLTK span_tokenize in order to preserve all white space and line breaks found between sentences.'''
     if not text:
