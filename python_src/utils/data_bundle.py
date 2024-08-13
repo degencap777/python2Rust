@@ -1,7 +1,7 @@
-from data import Data
-from error_code import ErrorCode
-from data_source import DataSource
-from inferenceMetadata import InferenceMetadata
+from utils.data import Data
+from utils.error_code import ErrorCode
+from utils.data_source import DataSource
+from utils.inferenceMetadata import InferenceMetadata
 
 class DataBundle():
     """Ordered list of texts, images, videos intended for multimodal inference input and output."""

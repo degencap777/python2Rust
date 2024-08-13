@@ -1,8 +1,8 @@
 from typing import Any
-from data_type import DataType
 from datetime import datetime
-from exceptions import InvalidArgsError
 from PIL import Image as PI
+from utils.data_type import DataType
+from utils.exceptions import InvalidArgsError
 
 def remove_line_breaks(text: str) -> str:
     return ' '.join(text.splitlines())
