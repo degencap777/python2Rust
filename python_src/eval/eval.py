@@ -4,6 +4,7 @@ from typing import Optional
 from collections.abc import Callable
 from utils.sampling_method import SamplingMethod
 from utils.data_bundle import DataBundle
+from utils.exceptions import InvalidArgsError
 
 class Dataset():
     """Represents evaluation datasets structured as list[dict]."""

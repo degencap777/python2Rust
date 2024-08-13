@@ -122,9 +122,6 @@ class ProtonException(Exception):
         message: str | None = None,
     ):
         super(ProtonException, self).__init__(message)
-  
-class InvalidArgsError(ProtonException):
-    """A proton method was called with invalid arguments."""
 
 class ErrorCode(Enum):
     """Represents errors that Proton can workaround without throwing an exception."""
