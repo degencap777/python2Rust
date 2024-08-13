@@ -1,8 +1,7 @@
 # from loader.text_chunker import TextChunker
 from storage.local_storage import LocalStorage
-from eval.eval import Dataset
+from eval.dataset import Dataset
 from core.data_bundle import DataBundle
-
 
 if __name__ == '__main__':
     """text_chunker test"""
