@@ -1,8 +1,8 @@
 from nltk.tokenize.punkt import PunktSentenceTokenizer
-from utils.data_source import DataSource, DataSourceType
-from utils.data_bundle import DataBundle
-from utils.data import Data
-from utils.defaults import Default
+from core.data_source import DataSource, DataSourceType
+from core.data_bundle import DataBundle
+from core.data import Data
+from config.defaults import Default
 from utils.strings import StringUtils
 
 class TextChunker:

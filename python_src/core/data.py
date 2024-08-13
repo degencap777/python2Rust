@@ -1,7 +1,7 @@
 from typing import Any
 from datetime import datetime
 from PIL import Image as PI
-from utils.data_type import DataType
+from core.data_type import DataType
 from utils.exceptions import InvalidArgsError
 
 def remove_line_breaks(text: str) -> str:

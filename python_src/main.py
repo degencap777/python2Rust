@@ -1,7 +1,7 @@
 # from loader.text_chunker import TextChunker
 from storage.local_storage import LocalStorage
 from eval.eval import Dataset
-from utils.data_bundle import DataBundle
+from core.data_bundle import DataBundle
 
 
 if __name__ == '__main__':
@@ -35,4 +35,4 @@ if __name__ == '__main__':
     for context, ground_truth, metadata, cached_result in receipt_dataset:
         print(context, ground_truth, metadata, cached_result)
 
-    """"""
+    """eval(0)"""

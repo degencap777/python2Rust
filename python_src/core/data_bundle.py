@@ -1,10 +1,10 @@
 from PIL import Image as PI
-from utils.data import Data
-from utils.error_code import ErrorCode
-from utils.data_source import DataSource
-from utils.data_type import DataType
+from core.data import Data
+from core.error_code import ErrorCode
+from core.data_source import DataSource
+from core.data_type import DataType
+from core.inference_metadata import InferenceMetadata
 from utils.exceptions import InvalidArgsError
-from utils.inferenceMetadata import InferenceMetadata
 
 class DataBundle():
     """Ordered list of texts, images, videos intended for multimodal inference input and output."""
