@@ -1,208 +1,340 @@
-import traceback
-from typing import Optional
-import regex as re
-from proton.config.defaults import Default
-from proton.core.conversation import Conversation
-from proton.core.data import Data
-from proton.core.data_bundle import DataBundle
-from proton.core.data_source import DataSource, DataSourceType
-from proton.core.interaction import Interaction
-from proton.core.batch import Batch
-from proton.dataloader.data_types.base_document import PageSet
-from proton.dataloader.engines.factory import DataLoaderEngineFactory
-from proton.dataloader.extractors.base_extractor import BaseExtractor
-from proton.dataloader.utils.aspose_engine_support import is_aspose_supported
-from proton.utils.doc_parsing import extract_file_basename
-from proton.utils.exceptions import DataLoaderExtractionTaskError
-if is_aspose_supported(): # Aspose is not supported in Mac/Darwin
-    from proton.dataloader.extractors.aspose_text_extractor import AsposeTextExtractor
-from proton.dataloader.orchestration import DataLoaderOrchestrator
-from proton.storage.gcs import GCS
-from proton.storage.local_storage import LocalStorage
-from proton.utils.numerals import NumberUtils
-from proton.utils.strings import StringUtils
-from proton.utils.sentence_splitter import SentenceSplitter
-from proton.utils.logger import Trace, log
+from unidecode import unidecode
+from urllib.parse import urlparse
+from pathlib import Path
+from enum import Enum
+from dataclasses import dataclass
+from typing import Any
+from datetime import datetime
+from PIL import Image as PI
+from nltk.tokenize.punkt import PunktSentenceTokenizer
+import os
 
-class TextChunker:
-    def __init__(self):
-        self.cache = None
-        self.next_bullet_id = 1
+class Default:
+    TEMPERATURE = 0
+    TEMPERATURE_GEMINI = 0.36    # 0.36 is based on a Bayesian optimization for GeminiPro on document extraction tasks
+    TOP_K = 40
+    TOP_P = 0.97
+    TOP_P_GEMINI = 1.0
+    TOP_P_OPENAI = None         # official recommendation is to use either temperature or top_p
+    MAX_OUTPUT_TOKENS = 2048    # tokens
+    MAX_OUTPUT_TOKENS_GEMINI15 = 8192
+    MAX_OUTPUT_TOKENS_ANTHROPIC = 4096
+    MAX_OUTPUT_TOKENS_LLAMA_70B = 2048
+    CHUNK_SIZE = 1000           # characters
+    CHUNK_OVERLAP = 0           # characters
+    CHUNKER_MAX_SENTENCE = 1000 # characters
+    FILE_ENCODING = 'utf-8' # used to be 'ISO-8859-1'
+    GCP_LOCATION = 'us-central1'
+    SPANNER_INSTANCE = 'proton'
+    SPANNER_TIMEOUT = 300       # seconds, the slowest operation is index creation
+    SPANNER_CACHE_DB = 'inference_cache'
+    SPANNER_EVAL_DB = 'evaluations'
+    SPANNER_WORKER_DB = 'worker'
+    MODEL_PALM = 'text-bison-32k@002'
+    MODEL_GECKO = 'textembedding-gecko@003'
+    MODEL_GEMINI_TEXT = 'gemini-1.5-flash-preview-0514'
+    MODEL_GEMINI_MULTIMODAL = 'gemini-1.5-flash-preview-0514'
+    MODEL_OPENAI_TEXT = 'gpt-4-turbo-preview'
+    MODEL_CLAUDE3_HAIKU = 'claude-3-haiku@20240307'
+    MODEL_CLAUDE3_SONNET = 'claude-3-sonnet@20240229'
+    MODEL_CLAUDE3_OPUS = 'claude-3-opus@20240229'
+    MODEL_LLAMA_70B = 'llama-3-70b@001'
+    MODEL_LLAMA_70B_IT = 'llama-3-70b-it@001'
+    MODEL_SHORTDOC_PRIMARY = 'gemini-1.0-pro-001'
+    MODEL_SHORTDOC_FALLBACK = 'gemini-1.5-flash-preview-0514'
+    MISTRAL_MODEL = 'Mistral-7B-IT-01'
+    GEMMA_MODEL = 'gemma-7b-it'
+    MAX_INFERENCE_THREADS = 20
+    INFERENCE_THREAD_TIMEOUT_SECONDS = 60*4  # Larger timeout to accommodate potential wait due to enter the thread pool
+    INFERENCE_THREAD_MAX_TIMEOUT_RETRIES = 3
+    NOT_FOUND_TAG = 'NOT_FOUND'
+    SECTION_NOT_FOUND_TAG = 'NO_SECTION'  # Used in QuestionSet primitive to avoid NOT_FOUND_TAG which causes the entire inference to be filtered out.
+    PROJECT_ID = os.getenv('PROJECT_ID', '')
+    SEARCH_DATASTORE = os.getenv('SEARCH_DATASTORE', '')
+    BUCKET_NAME = os.getenv('BUCKET_NAME', '')
+    VS_LOCATION = 'global'      # vertex search
+    VS_DEFAULT_CONFIG = 'default_config'
+    VS_MAX_RESULTS = 10         # maximum = 100
+    VS_NUM_SUMMARY_SOURCES = 5  # maximum = 5
+    VS_NUM_EXTRACTIVE_ANSWERS = 1   # per document, maximum = 5
+    VS_NUM_EXTRACTIVE_SEGMENTS = 5  # per document, maximum = 10
+    OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+    OPENAI_ORG_ID = os.getenv('OPENAI_ORG_ID')
+    WORKER_DEFAULT_NAMESPACE = 'DEFAULT'
+    WORKER_MAX_TASK_RETRIES = 3
+    WORKER_POLLING_INTERVAL_SECONDS = 1.0
+    API_PAGE_SIZE = 100
+    SHORTDOC_PREAMBLE = 'You are a detail oriented AI assistant responsible for reading documents and answering questions about them.'
+    SHORTDOC_CHUNK_SIZE = 3000
+    
+class DataType(Enum):
+    """Multimodal inputs and outputs are expected to use these data types."""
 
-    def _merge_chunks(self, chunks: list[str], start_index: int, num_chunks: int) -> str:
-        group = []
-        for i in range(num_chunks):
-            if start_index + i < len(chunks):
-                group.append(chunks[start_index + i])
-        return '\n'.join(group)
+    UNDEFINED = 1   # triggers automatic type detection
+    TEXT = 2        # str
+    INT = 3
+    FLOAT = 4
+    BOOL = 5
+    CHAR = 6
+    DATE = 7
+    JSON_ARRAY = 8  # TODO: should we rename it to LIST_OF_STRINGS?
+    JSON_DICT = 9   # TODO: should we rename it to DICT?
+    IMAGE = 10      # PIL.Image
+    MULTISELECT_ANSWERS = 11  # list of answer option labels like ['B', 'F']
+    PDF = 12
+    QUESTIONSET_ANSWERS = 13  # list of answers
+    DATETIME = 14
 
-    def create_nonoverlapping_chunks(self, text: str, chunk_length_characters: int = Default.CHUNK_SIZE, trace: int = 0):
-        '''Split text into sentences, while preserving all original white space and line breaks.'''
-        sentences = SentenceSplitter.split_into_sentences(text)
-        chunks = []
-        chunk = []
-        chunk_size = 0
-        max_chunk = 0
-        for sentence in sentences:
-            if len(sentence) > Default.CHUNKER_MAX_SENTENCE:
-                log(f'Warning: long sentence ({len(sentence)} chars)', trace)
-            chunk.append(sentence)
-            chunk_size += len(sentence)
-            if chunk_size >= chunk_length_characters:
-                combined = ''.join(chunk)
-                if len(combined) > max_chunk:
-                    max_chunk = len(combined)
-                chunks.append(combined)
-                chunk = []
-                chunk_size = 0
-        if len(chunk):
-            chunks.append(' '.join(chunk).strip())
-        log(f'Created {len(chunks)} nonoverlapping chunks from {len(text)} characters, longest chunk={max_chunk}', trace)
-        return chunks
+    def __repr__(self):
+        return repr(self.name)
 
-    # Inject unique IDs into all alphanumeric list item bullets: (A) -> (A.001), (B) -> (B.002), etc.
-    def inject_list_bullet_ids(self, text: str):
-        upper = [chr(i) for i in range(ord('A'), ord('Z') + 1)]
-        lower = [chr(i) for i in range(ord('a'), ord('z') + 1)]
-        numeric = [str(i) for i in range(1, 31)]
-        roman = [NumberUtils.int_to_roman(i) for i in range(1, 31)]
-        target_labels = [f'({label})' for label in upper + lower + numeric + roman]
-        lines = text.split('\n')
-        lines_injected = []
-        for line in lines:
-            line = line.strip()
-            if line.startswith('-'):  # TODO: consider removing page numbers via PDF parser
-                line = re.sub(r'^\-[0-9]*\-\s', ' ', line, count=1).strip()
-            if line.startswith('('):
-                index = line.find(')')
-                if index > 0:
-                    label = line[: index + 1].replace(' ', '')
-                    if label in target_labels:
-                        line = (
-                            label.replace(')', f'.{str(self.next_bullet_id).zfill(3)})')
-                            + line[len(label) :]
-                        )
-                        self.next_bullet_id += 1
-            lines_injected.append(line)
-        return '\n'.join(lines_injected)
+    def to_string(self) -> str:
+        return self.name
 
-    def get_batch(self, document_uri: str, document_text: str, chunk_length_characters: int = 1000, overlap_factor: int = 0, normalize_special_characters: bool = True, trace: Trace = Trace.OFF) -> Batch:
-        """Splits the document into chunks and wraps them into a Batch of interactions with Text inputs."""
-        file_name = StringUtils.parse_filename_from_uri(document_uri)
-        source = DataSource(DataSourceType.DOCUMENT, file_name.split('.')[0], location=document_uri)
-        chunks = self.get_text_chunks(document_uri, document_text, chunk_length_characters, overlap_factor, normalize_special_characters, trace)
-        interactions = [Interaction(Conversation.from_data_bundle(chunk), data_source=source) for chunk in chunks]
-        return Batch(interactions, data_source=source)
+    @classmethod
+    def from_string(cls, string: str) -> 'DataType':
+        return cls[string]
+  
+class Data():
+    """Unit of Input or Output data for multimodal inference."""
 
-    # Overlap is specified as 1/2, 1/3, 1/N and implemented by combining N non-overlapping chunks
-    def get_text_chunks(self, document_uri: str, document_text: str, chunk_length_characters: int = 1000, overlap_factor: int = 0, normalize_special_characters: bool = True, trace: Trace = Trace.OFF) -> list[DataBundle]:
-        """Splits the document into chunks with optional overlap.
-        Args:
-            document_uri: used only as a cache key
-            document_text: full document text
-            chunk_length_characters: minimum chunk length (actual chunks can be longer as the algorithm avoids splitting senteces.)
-            overlap_factor: specifies overlap as a fraction of chunk size: 5 represents 20% overlap, 1 represents no overlap.
-            normalize_special_characters: normalizes the style of line breaks and apostrophes
-        """
-        file_name = StringUtils.parse_filename_with_extension_from_uri(document_uri)
-        source = DataSource(DataSourceType.DOCUMENT, file_name, location=document_uri)
-        if overlap_factor < 2:
-            overlap_factor = 0
-        if normalize_special_characters:
-            document_text = StringUtils.normalize_special_characters(document_text)
-        if chunk_length_characters <= 0:
-            return [DataBundle([Data(document_text, id='1')], data_source=source)]
-        if self.cache:
-            cached: list[Data] = self.cache.get(document_uri, chunk_length_characters, overlap_factor)
-            if cached:
-                log(f'Using {len(cached)} cached [{chunk_length_characters}] chunks for {document_uri}')
-                return cached
-        if overlap_factor == 0:
-            chunk_strings = self.create_nonoverlapping_chunks(document_text, chunk_length_characters)
+    def __init__(self, value: Any, data_type: DataType = DataType.UNDEFINED, id: str = ''):
+        self.value = value
+        self.id = id
+        if data_type == DataType.UNDEFINED:
+            self.data_type = Data.detect_data_type( value )
         else:
-            small_chunks = self.create_nonoverlapping_chunks(document_text, round(chunk_length_characters / overlap_factor))
-            chunk_strings = []
-            for i in range(0, len(small_chunks), overlap_factor - 1):
-                chunk_strings.append(self._merge_chunks(small_chunks, i, overlap_factor))
-            log(f'Merged {len(small_chunks)} nonoverlapping chunks into {len(chunk_strings)} chunks with 1/{overlap_factor} overlap.')
-        chunks = []
-        for i, chunk_string in enumerate(chunk_strings):
-            chunk = DataBundle([Data(chunk_string, id=str(i+1))], data_source=source)
-            chunks.append(chunk)
-        if self.cache:
-            self.cache.set(document_uri, chunk_length_characters, overlap_factor, chunks)
-        log(f'Created {len(chunks)} chunks for {document_uri}[{len(document_text)}] ({chunk_length_characters} chars, overlap={overlap_factor})', trace)
-        return chunks
+            self.data_type = data_type
 
-    def wrap_pages_into_section_tags(self, pages: list[str]) -> dict[str, str]:
-        sections_by_id: dict[str, str] = {}
-        for i, page in enumerate(pages):
-            id = f'SECTION-{i+1}'
-            sections_by_id[id] = f'<{id}>\n{page}\n</{id}>'
-        return sections_by_id
-
-    def split_into_sections(self, document_uri: str, document_text: str, chunk_length_characters: int = 1000, trace: Trace = Trace.OFF) -> dict[str, str]:
-        '''Inserts tags like <SECTION-123>...</SECTION-123> so that LLM can identify relevant chunks.
-        Args:
-            document_uri: used only as a cache key
-            document_text: full document text
-            chunk_length_characters: minimum chunk length (actual chunks can be longer as the algorithm avoids splitting senteces.)
-            overlap_factor: specifies overlap as a fraction of chunk size: 5 represents 20% overlap, 1 represents no overlap.
-            normalize_special_characters: normalizes the style of line breaks and apostrophes
-        '''
-        chunks = self.get_text_chunks(
-            document_uri=document_uri,
-            document_text=document_text,
-            chunk_length_characters=chunk_length_characters,
-            overlap_factor=0,
-            normalize_special_characters=False,
-            trace=trace)
-        log(f'in split_into_sections with {len(document_text)} characters, {len(chunks)} chunks.', trace)
-        sections_by_id: dict[str, str] = {}
-        for i, chunk in enumerate(chunks):
-            id = f'SECTION-{i+1}'
-            sections_by_id[id] = f'<{id}>\n{chunk.to_text()}\n</{id}>'
-        return sections_by_id
-
-    def get_pages(self, document_uri: str, extractor: Optional[BaseExtractor] = None, trace: int = Trace.OFF) -> list[tuple[int, str]]:
-        """Get page text from a PDF document URI, with optional extraction and tracing."""
-
-        if not extractor:
-            extractor = DataLoaderEngineFactory().get_extractor(extractor_type='text')
-        log(f'Extracting pages from {document_uri} using {extractor.__class__.__name__}', trace)
-        loader = DataLoaderOrchestrator.init(initial_extractors={'text': extractor}, trace=trace)
-        results = loader.extract_data_from_source(document_uri, trace=trace)
-        try:
-            document_key = extract_file_basename(GCS.get_blob_name_from_uri(document_uri))
-            result = results[document_key]['text'][0].result
-
-            # Type Check and Handling:
-            if isinstance(result, PageSet):
-                return result.to_list_with_page_nums()
-            elif result is None:  # Handle None case separately
-                raise DataLoaderExtractionTaskError(f'No pages extracted for document: {document_uri}')
+    def __repr__(self):
+        if self.data_type == DataType.IMAGE:
+            width, height = self.value.size
+            return f'{self.data_type.name}: [{width}x{height}]'
+        elif self.data_type == DataType.PDF:
+            return f'PDF: [{len(self.value)}]'
+        elif self.data_type == DataType.TEXT:
+            if not self.value:
+                return f'{self.data_type.name}[0]: None'
+            truncated_to_one_line = truncate(self.value, 100).replace('\n', ' ')
+            return f'{self.data_type.name}[{len(self.value)}]: {truncated_to_one_line}'
+        else:
+            return f'{self.data_type.name}: {self.value}'
+        
+    def detect_data_type(value: Any) -> DataType:
+        if isinstance(value, bool):  # bool is subclass of int so this must come first
+            return DataType.BOOL
+        if isinstance(value, int):
+            return DataType.INT
+        if isinstance(value, str):
+            return DataType.TEXT
+        if isinstance(value, float):
+            return DataType.FLOAT
+        if isinstance(value, datetime):
+            return DataType.DATE
+        if isinstance(value, PI.Image):
+            return DataType.IMAGE
+        if isinstance(value, list):
+            if all([isinstance(item, str) and len(item) == 1 for item in value]):
+                return DataType.MULTISELECT_ANSWERS
             else:
-                raise DataLoaderExtractionTaskError(f'Extracted result is not a PageSet. Type: {type(result)}')
-        except Exception as e:
-            err_trace = traceback.format_exc()
-            err_type = type(e).__name__
-            raise DataLoaderExtractionTaskError(f'Unable to extract pages for document: {document_uri}, {err_type}: {err_trace}') from e  # Chain the original exception
-        finally:
-            loader.cleanup()
+                return DataType.JSON_ARRAY
+        if isinstance(value, dict):
+            return DataType.JSON_DICT
+        if isinstance(value, bytes):
+            return DataType.PDF
+        raise InvalidArgsError(f'Unknown data type: {type(value)}.')
 
+class DataSourceType(Enum):
+    DOCUMENT = 1
+    IMAGE = 2
+    DIRECTORY = 3
 
+@dataclass
+class DataSource():
+    """Information about the source of data in Batches and Interactions."""
+    source_type: DataSourceType = DataSourceType.DOCUMENT
+    name: str = ''
+    location: str = ''
+    version: str = ''
+
+    def __repr__(self) -> str:
+        v = self.version or ''
+        return f'{self.name}.{v}'
+
+class ErrorCode(Enum):
+    """Represents errors that Proton can workaround without throwing an exception."""
+
+    UNDEFINED = 1
+    RESPONSE_BLOCKED = 2  # Model prediction blocked by filters, can retry with a different model
+
+@dataclass
+class InferenceMetadata():
+    num_input_tokens: int = 0
+    num_output_tokens: int = 0
+
+    def __repr__(self) -> str:
+        return f'num_input_tokens={self.num_input_tokens}, num_output_tokens={self.num_output_tokens}'
+
+class DataBundle():
+    """Ordered list of texts, images, videos intended for multimodal inference input and output."""
+
+    def __init__(
+        self,
+        items: list[Data],
+        error_code: ErrorCode = ErrorCode.UNDEFINED,
+        data_source: DataSource | None = None
+    ):
+        self.items = items
+        self.error_code = error_code
+        self.inference_metadata: InferenceMetadata
+        self.data_source = data_source         # optional metadata about the source of data for this bundle
+
+    def __repr__(self):
+        if self.is_empty():
+            return 'EMPTY'
+        if len(self.items) == 1:
+            return f'Bundle[{self.items[0]}]'
+        else:
+            return f'Bundle[{len(self.items)} items starting with {self.items[0]}]'
+    
+    def is_empty(self) -> bool:
+        if not self.items:
+            return True
+        for item in self.items:
+            if item.value:
+                return False
+        return True
+  
+class ProtonException(Exception):
+    def __init__(
+        self,
+        message: str | None = None,
+    ):
+        super(ProtonException, self).__init__(message)
+        
+class InvalidArgsError(ProtonException):
+    """A proton method was called with invalid arguments."""
+    
+def truncate(text: str, max_length: int, ellipsis: str = '...', no_linebreaks: bool = False) -> str:
+    """Truncates a string to a given length."""
+    if no_linebreaks:
+        text = remove_line_breaks(text)
+    if len(text) > max_length:
+        return text[:max_length - len(ellipsis)] + ellipsis
+    else:
+        return text
+
+def remove_line_breaks(text: str) -> str:
+    return ' '.join(text.splitlines())
+
+def split_into_sentences(text: str) -> list[str]:
+    '''Uses NLTK span_tokenize in order to preserve all white space and line breaks found between sentences.'''
+    if not text:
+        return []
+    punkt = PunktSentenceTokenizer()
+    spans = punkt.span_tokenize(text=text, realign_boundaries=True)
+    sentences = []
+    if not spans:
+        return sentences
+    previous_span = None
+    for span in spans:
+        if previous_span:
+            sentences.append(text[previous_span[0]: span[0]])
+        previous_span = span
+    if previous_span:
+        sentences.append(text[previous_span[0]:])
+    return sentences
+    
+def create_nonoverlapping_chunks(text: str, chunk_length_characters: int = Default.CHUNK_SIZE, trace: int = 0):
+    '''Split text into sentences, while preserving all original white space and line breaks.'''
+    sentences = split_into_sentences(text)
+    chunks = []
+    chunk = []
+    chunk_size = 0
+    max_chunk = 0
+    for sentence in sentences:
+        if len(sentence) > Default.CHUNKER_MAX_SENTENCE:
+            print(f'Warning: long sentence ({len(sentence)} chars)', trace)
+        chunk.append(sentence)
+        chunk_size += len(sentence)
+        if chunk_size >= chunk_length_characters:
+            combined = ''.join(chunk)
+            if len(combined) > max_chunk:
+                max_chunk = len(combined)
+            chunks.append(combined)
+            chunk = []
+            chunk_size = 0
+    if len(chunk):
+        chunks.append(' '.join(chunk).strip())
+    print(f'Created {len(chunks)} nonoverlapping chunks from {len(text)} characters, longest chunk={max_chunk}', trace)
+    return chunks
+
+def _merge_chunks(chunks: list[str], start_index: int, num_chunks: int) -> str:
+    group = []
+    for i in range(num_chunks):
+        if start_index + i < len(chunks):
+            group.append(chunks[start_index + i])
+    return '\n'.join(group)
+
+def get_text_chunks(document_uri: str, document_text: str, chunk_length_characters: int = 1000, overlap_factor: int = 0, normalize_special_characters_flag: bool = True):
+    file_name = parse_filename_with_extension_from_uri(document_uri)
+    source = DataSource(DataSourceType.DOCUMENT, file_name, location=document_uri)
+    if overlap_factor < 2:
+        overlap_factor = 0
+    if normalize_special_characters_flag:
+        document_text = normalize_special_characters(document_text)
+    if chunk_length_characters <= 0:
+        return [DataBundle([Data(document_text, id='1')], data_source=source)]
+    if overlap_factor == 0:
+        chunk_strings = create_nonoverlapping_chunks(document_text, chunk_length_characters)
+    else:
+        small_chunks = create_nonoverlapping_chunks(document_text, round(chunk_length_characters / overlap_factor))
+        chunk_strings = []
+        for i in range(0, len(small_chunks), overlap_factor - 1):
+            chunk_strings.append(_merge_chunks(small_chunks, i, overlap_factor))
+        print(f'Merged {len(small_chunks)} nonoverlapping chunks into {len(chunk_strings)} chunks with 1/{overlap_factor} overlap.')
+    chunks = []
+    for i, chunk_string in enumerate(chunk_strings):
+        chunk = DataBundle([Data(chunk_string, id=str(i+1))], data_source=source)
+        chunks.append(chunk)
+    print(f'Created {len(chunks)} chunks for {document_uri}[{len(document_text)}] ({chunk_length_characters} chars, overlap={overlap_factor})')
+    return chunks
+
+def read_text_file(path_to_text_file: str, normalize_special_characters_flag: bool = True) -> str:
+    with open(path_to_text_file, 'r') as file:
+        text = file.read()
+        if normalize_special_characters_flag:
+            text = normalize_special_characters(text)
+        return text
+        
+def normalize_special_characters(text: str) -> str:
+        if not text:
+            return text
+        text = fix_line_breaks(text)
+        return fix_apostrophes(text)
+
+def fix_line_breaks(text: str) -> str:
+        text = '\n'.join(text.splitlines())
+        text = text.replace('\r', '')
+        return text
+
+def fix_apostrophes(text: str) -> str:
+        if not text:
+            return text
+        text = unidecode(text)
+        return text.replace('\\u2019', "'")
+   
+def parse_filename_with_extension_from_uri(uri: str) -> str:
+    """Parses the file name from a URI."""
+    parts = urlparse(uri)
+    path = Path(parts.path)
+    return path.stem + path.suffix
+         
 if __name__ == '__main__':
     document = 'Santa claus is coming to town. ' * 10
-    batch = TextChunker().split_into_sections('test.txt', document, chunk_length_characters=100, trace=Trace.ON)
-    print(batch)
-
-    text = LocalStorage().read_text_file('examples/books/book1.txt')
-    chunks = TextChunker().get_text_chunks('book1.txt', text, 500)
-    for chunk in chunks[:3]:
+    
+    text = read_text_file('books/book1.txt')
+    chunks = get_text_chunks('book1.txt', text, 5)
+    for chunk in chunks:
         print('=' * 100)
         print(chunk)
-
-    # file_path = 'gs://test_proton/deal_docs/pdf/VENT_45.pdf'
-    # extractor = DataLoaderEngineFactory().get_extractor(extractor_type='text')
-    # pages = TextChunker().get_pages(file_path, extractor=extractor, trace=Trace.ON)
-    # print(pages[:1])
