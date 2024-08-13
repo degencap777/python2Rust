@@ -1,6 +1,9 @@
+from PIL import Image as PI
 from utils.data import Data
 from utils.error_code import ErrorCode
 from utils.data_source import DataSource
+from utils.data_type import DataType
+from utils.exceptions import InvalidArgsError
 from utils.inferenceMetadata import InferenceMetadata
 
 class DataBundle():
@@ -32,4 +35,15 @@ class DataBundle():
             if item.value:
                 return False
         return True
-  
+
+    @staticmethod
+    def from_float(value: float) -> 'DataBundle':
+        if not isinstance(value, (float, int)):
+            raise InvalidArgsError(f'Expected a float, got: {type(value)}')
+        return DataBundle([Data(float(value), DataType.FLOAT)])
+    
+    @staticmethod
+    def from_image(image: PI.Image) -> 'DataBundle':
+        if not isinstance(image, PI.Image):
+            raise InvalidArgsError(f'Expected a PI.Image, got: {type(image)}')
+        return DataBundle([Data(image)])

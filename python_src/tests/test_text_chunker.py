@@ -349,7 +349,7 @@ class TestStringMethods(unittest.TestCase):
     #     self.assertEqual(result, goal)
     
     # def test_read_text_file(self):
-    #     path = "books/book1.txt"
+    #     path = "examples/books/book1.txt"
     #     goal = "First 'line'.\nSecond 'line'.\nThird 'line'."
     #     result = self.read_text_file(path)
     #     self.assertEqual(result, goal)
@@ -377,7 +377,7 @@ class TestStringMethods(unittest.TestCase):
     
     # def test_parse_filename_with_extension_from_uri(self):
     #     goal = "book1.txt"
-    #     temp = "book/book1.txt"
+    #     temp = "examples/book/book1.txt"
     #     result = self.parse_filename_with_extension_from_uri(temp)
     #     self.assertEqual(result, goal)
     

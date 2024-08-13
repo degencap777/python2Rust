@@ -1,11 +1,9 @@
-from unidecode import unidecode
-from urllib.parse import urlparse
-from pathlib import Path
 from nltk.tokenize.punkt import PunktSentenceTokenizer
 from utils.data_source import DataSource, DataSourceType
 from utils.data_bundle import DataBundle
 from utils.data import Data
 from utils.defaults import Default
+from utils.strings import StringUtils
 
 class TextChunker:
     def __init__(self) -> None:
@@ -61,7 +59,7 @@ class TextChunker:
         return '\n'.join(group)
 
     def get_text_chunks(self, document_uri: str, document_text: str, chunk_length_characters: int = 1000, overlap_factor: int = 0, normalize_special_characters_flag: bool = True):
-        file_name = self.parse_filename_with_extension_from_uri(document_uri)
+        file_name = StringUtils.parse_filename_with_extension_from_uri(document_uri)
         source = DataSource(DataSourceType.DOCUMENT, file_name, location=document_uri)
         if overlap_factor < 2:
             overlap_factor = 0
@@ -88,29 +86,5 @@ class TextChunker:
         with open(path_to_text_file, 'r') as file:
             text = file.read()
             if normalize_special_characters_flag:
-                text = self.normalize_special_characters(text)
+                text = StringUtils.normalize_special_characters(text)
             return text
-            
-    def normalize_special_characters(self, text: str) -> str:
-            if not text:
-                return text
-            text = self.fix_line_breaks(text)
-            return self.fix_apostrophes(text)
-
-    def fix_line_breaks(self, text: str) -> str:
-            text = '\n'.join(text.splitlines())
-            text = text.replace('\r', '')
-            return text
-
-    def fix_apostrophes(self, text: str) -> str:
-            if not text:
-                return text
-            text = unidecode(text)
-            return text.replace('\\u2019', "'")
-    
-    def parse_filename_with_extension_from_uri(self, uri: str) -> str:
-        """Parses the file name from a URI."""
-        parts = urlparse(uri)
-        path = Path(parts.path)
-        return path.stem + path.suffix
-         

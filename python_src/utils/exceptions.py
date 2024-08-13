@@ -9,3 +9,5 @@ class ProtonException(Exception):
 class InvalidArgsError(ProtonException):
     """A proton method was called with invalid arguments."""
 
+class AbstractMethodNotImplementedError(ProtonException):
+    """User did not provide an implementation for a required method."""
