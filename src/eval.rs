@@ -2,7 +2,7 @@ use py2rs::text_chunker;
 
 use std::collections::HashMap;
 use std::error::Error;
-use std::fmt
+use std::fmt;
 /// Represents the type of data source (e.g., Document, Image, Directory).
 #[derive(Debug, Clone)]
 enum SamplingMethod {

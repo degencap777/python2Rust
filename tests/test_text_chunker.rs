@@ -34,7 +34,7 @@ fn fix_apostrophes() {
 
 #[test]
 fn test_read_text_file() {
-    let path = "books/book1.txt"; 
+    let path = "examples/books/book1.txt"; 
     let goal = "First 'line'.\nSecond 'line'.\nThird 'line'."; 
 
     match text_chunker::read_text_file(path, true) {
